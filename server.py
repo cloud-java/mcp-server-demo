@@ -36,6 +36,49 @@ def weather(city: str):
         f"http://v1.yiketianqi.com/free/week?appid={appid}&appsecret={appsecret}&unescape=1&city={city}"
     ).json()
 
+
+# https://newsapi.org/docs/endpoints/everything
+@mcp.tool()
+def news(
+    q: str,
+    from_date: str = "",
+    sort_by: str = "publishedAt",
+    page_size: int = 10,
+) -> dict:
+    """
+    查询全球新闻
+    Args:
+        q: 搜索关键词
+        from_date: 起始日期，格式 YYYY-MM-DD，可选
+        sort_by: 排序方式，默认 publishedAt
+        page_size: 返回条数，默认 10
+    Returns:
+        dict: 新闻列表
+    """
+    api_key = os.getenv("NEWS_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "缺少新闻接口凭证：请在 .env 中填写 NEWS_API_KEY。"
+        )
+
+    params = {
+        "q": q,
+        "sortBy": sort_by,
+        "pageSize": page_size,
+        "apiKey": api_key,
+    }
+    if from_date:
+        params["from"] = from_date
+
+    response = requests.get(
+        "https://newsapi.org/v2/everything",
+        params=params,
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 app = mcp.streamable_http_app()
 
 
