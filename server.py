@@ -28,13 +28,22 @@ def weather(city: str):
     appid = os.getenv("WEATHER_APPID")
     appsecret = os.getenv("WEATHER_APPSECRET")
     if not appid or not appsecret:
-        raise RuntimeError(
-            "缺少天气接口凭证：请先复制 .env.example 为 .env "
-            "并填写 WEATHER_APPID / WEATHER_APPSECRET。"
+        return {"error": "缺少天气接口凭证：请先复制 .env.example 为 .env 并填写 WEATHER_APPID / WEATHER_APPSECRET。"}
+    try:
+        response = requests.get(
+            f"http://v1.yiketianqi.com/free/week?appid={appid}&appsecret={appsecret}&unescape=1&city={city}",
+            timeout=15,
         )
-    return requests.get(
-        f"http://v1.yiketianqi.com/free/week?appid={appid}&appsecret={appsecret}&unescape=1&city={city}"
-    ).json()
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.Timeout:
+        return {"error": f"请求超时，请稍后重试（city={city}）"}
+    except requests.exceptions.ConnectionError:
+        return {"error": "网络连接失败，请检查网络后重试"}
+    except requests.exceptions.HTTPError as e:
+        return {"error": f"接口返回错误：{e.response.status_code} {e.response.reason}"}
+    except Exception as e:
+        return {"error": f"未知错误：{e}"}
 
 
 # https://newsapi.org/docs/endpoints/everything
@@ -57,9 +66,7 @@ def news(
     """
     api_key = os.getenv("NEWS_API_KEY")
     if not api_key:
-        raise RuntimeError(
-            "缺少新闻接口凭证：请在 .env 中填写 NEWS_API_KEY。"
-        )
+        return {"error": "缺少新闻接口凭证：请在 .env 中填写 NEWS_API_KEY。"}
 
     params = {
         "q": q,
@@ -70,13 +77,22 @@ def news(
     if from_date:
         params["from"] = from_date
 
-    response = requests.get(
-        "https://newsapi.org/v2/everything",
-        params=params,
-        timeout=15,
-    )
-    response.raise_for_status()
-    return response.json()
+    try:
+        response = requests.get(
+            "https://newsapi.org/v2/everything",
+            params=params,
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.Timeout:
+        return {"error": f"请求超时，请稍后重试（q={q}）"}
+    except requests.exceptions.ConnectionError:
+        return {"error": "网络连接失败，请检查网络后重试"}
+    except requests.exceptions.HTTPError as e:
+        return {"error": f"接口返回错误：{e.response.status_code} {e.response.reason}"}
+    except Exception as e:
+        return {"error": f"未知错误：{e}"}
 
 
 app = mcp.streamable_http_app()
