@@ -1,13 +1,84 @@
+from datetime import datetime, timezone
 from pathlib import Path
+import os
+import threading
+import time
+import uuid
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 import requests
-import os
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 mcp = FastMCP("MyServer")
+
+CAKE_BAKE_SECONDS = 180
+
+_tasks: dict[str, dict] = {}
+_tasks_lock = threading.Lock()
+
+
+def _complete_cake_task(task_id: str) -> None:
+    time.sleep(CAKE_BAKE_SECONDS)
+    with _tasks_lock:
+        if task_id in _tasks:
+            _tasks[task_id]["status"] = "completed"
+            _tasks[task_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
+
+
+@mcp.tool()
+def start_make_cake() -> dict:
+    """
+    提交制作蛋糕任务（约 3 分钟完成）。立即返回 task_id，勿阻塞等待；
+    请稍后调用 check_cake_status(task_id) 查询进度。
+    """
+    task_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    with _tasks_lock:
+        _tasks[task_id] = {
+            "status": "processing",
+            "created_at": now,
+            "completed_at": None,
+        }
+    threading.Thread(target=_complete_cake_task, args=(task_id,), daemon=True).start()
+    return {
+        "task_id": task_id,
+        "message": "蛋糕制作任务已提交，大约需要 3 分钟。请保存 task_id，稍后使用 check_cake_status 查询。",
+        "estimated_seconds": CAKE_BAKE_SECONDS,
+    }
+
+
+@mcp.tool()
+def check_cake_status(task_id: str) -> dict:
+    """
+    根据任务 ID 查询蛋糕制作是否完成。
+    Args:
+        task_id: start_make_cake 返回的任务 ID
+    """
+    with _tasks_lock:
+        task = _tasks.get(task_id)
+
+    if task is None:
+        return {
+            "task_id": task_id,
+            "status": "not_found",
+            "message": "未找到该任务，请确认 task_id 是否正确。",
+        }
+
+    if task["status"] == "completed":
+        return {
+            "task_id": task_id,
+            "status": "completed",
+            "message": "蛋糕已经制作好了，请享用",
+        }
+
+    return {
+        "task_id": task_id,
+        "status": "processing",
+        "message": "蛋糕制作中，耐心等待",
+    }
+
 
 # 本地的一个函数，就可以当做工具
 @mcp.tool()
