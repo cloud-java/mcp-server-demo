@@ -7,11 +7,29 @@ import uuid
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 import requests
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-mcp = FastMCP("MyServer")
+HOST = os.getenv("MCP_HOST", "0.0.0.0")
+PORT = int(os.getenv("MCP_PORT", "8010"))
+
+# 远程部署时必须配置 transport_security，否则 MCP SDK 会拒绝非 localhost 的 Host 头（HTTP 421）
+_allowed_hosts = os.getenv("MCP_ALLOWED_HOSTS", f"127.0.0.1:*,localhost:*,[::1]:*")
+_transport_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=os.getenv("MCP_DNS_REBINDING_PROTECTION", "false").lower()
+    in ("1", "true", "yes"),
+    allowed_hosts=[h.strip() for h in _allowed_hosts.split(",") if h.strip()],
+)
+
+mcp = FastMCP(
+    "MyServer",
+    host=HOST,
+    port=PORT,
+    stateless_http=True,
+    transport_security=_transport_security,
+)
 
 
 # 本地的一个函数，就可以当做工具
@@ -105,4 +123,4 @@ app = mcp.streamable_http_app()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8010)
+    uvicorn.run(app, host=HOST, port=PORT)
